@@ -1,82 +1,138 @@
-import Head from 'next/head'
+import Head from "next/head";
+import { useState, useRef } from "react";
+import { Avatar } from "@material-ui/core";
+import styled from "styled-components";
+import firebase from "firebase/app";
+import "firebase/firestore";
+import "firebase/auth";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { useCollectionData } from "react-firebase-hooks/firestore";
+import { Button } from "@material-ui/core";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDcK0zo0xmyuZqauWV2tbkTmXijhdFcoNk",
+  authDomain: "superchat-d92e4.firebaseapp.com",
+  projectId: "superchat-d92e4",
+  storageBucket: "superchat-d92e4.appspot.com",
+  messagingSenderId: "1041041005225",
+  appId: "1:1041041005225:web:087a4e527f831ce60167b8",
+};
+
+const app = !firebase.apps.length
+  ? firebase.initializeApp(firebaseConfig)
+  : firebase.app();
+
+const auth = app.auth();
+const firestore = app.firestore();
+const provider = new firebase.auth.GoogleAuthProvider();
 
 export default function Home() {
+  const [user] = useAuthState(auth);
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2">
+    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-[whitesmoke]">
       <Head>
-        <title>Create Next App</title>
+        <title>SuperChat</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="flex flex-col items-center justify-center w-full flex-1 px-20 text-center">
-        <h1 className="text-6xl font-bold">
-          Welcome to{' '}
-          <a className="text-blue-600" href="https://nextjs.org">
-            Next.js!
-          </a>
-        </h1>
-
-        <p className="mt-3 text-2xl">
-          Get started by editing{' '}
-          <code className="p-3 font-mono text-lg bg-gray-100 rounded-md">
-            pages/index.js
-          </code>
-        </p>
-
-        <div className="flex flex-wrap items-center justify-around max-w-4xl mt-6 sm:w-full">
-          <a
-            href="https://nextjs.org/docs"
-            className="p-6 mt-6 text-left border w-96 rounded-xl hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Documentation &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Find in-depth information about Next.js features and API.
-            </p>
-          </a>
-
-          <a
-            href="https://nextjs.org/learn"
-            className="p-6 mt-6 text-left border w-96 rounded-xl hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Learn &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Learn about Next.js in an interactive course with quizzes!
-            </p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className="p-6 mt-6 text-left border w-96 rounded-xl hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Examples &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Discover and deploy boilerplate example Next.js projects.
-            </p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className="p-6 mt-6 text-left border w-96 rounded-xl hover:text-blue-600 focus:text-blue-600"
-          >
-            <h3 className="text-2xl font-bold">Deploy &rarr;</h3>
-            <p className="mt-4 text-xl">
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer className="flex items-center justify-center w-full h-24 border-t">
-        <a
-          className="flex items-center justify-center"
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className="h-4 ml-2" />
-        </a>
-      </footer>
+      <Container className="shadow-xl w-[500px] h-[700px] grid place-content-center relative">
+        {user ? <ChatRoom /> : <SignIn />}
+      </Container>
     </div>
-  )
+  );
 }
+
+const ChatRoom = () => {
+  const dummy = useRef();
+
+  const messagesRef = firestore.collection("messages");
+  const query = messagesRef.orderBy("createdAt").limit(25);
+  const [messages] = useCollectionData(query, { idField: "id" });
+
+  const [formValue, setFormValue] = useState("");
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+
+    const { uid, photoURL } = auth.currentUser;
+
+    await messagesRef.add({
+      text: formValue,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      uid,
+      photoURL,
+    });
+
+    setFormValue("");
+
+    dummy.current.scrollIntoView({ behavior: "smooth" });
+  };
+
+  return (
+    <Container className="w-full">
+      <div>
+        {messages &&
+          messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)}
+        <div ref={dummy}></div>
+      </div>
+      <form
+        className="absolute bottom-0 left-0 flex justify-center w-full p-2"
+        onSubmit={sendMessage}
+      >
+        <input
+          className="w-4/5 border-[whitesmoke] border-2 px-2"
+          placeholder="say something kind..."
+          value={formValue}
+          onChange={(e) => setFormValue(e.target.value)}
+        />
+        <Button variant="outlined" className="w-1/5" type="submit">
+          Send
+        </Button>
+      </form>
+    </Container>
+  );
+};
+
+const ChatMessage = (props) => {
+  const { text, uid, photoURL } = props.message;
+
+  const messageClass = uid === auth.currentUser.uid ? "sent" : "received";
+
+  return (
+    <div className={`message ${messageClass} flex items-center mb-2`}>
+      <UserAvatar src={photoURL} className="mr-2" />
+      <p>{text}</p>
+    </div>
+  );
+};
+
+const SignIn = () => {
+  const signInWithGoogle = () => {
+    auth.signInWithPopup(provider);
+  };
+
+  return (
+    <div>
+      <Button variant="outlined" onClick={signInWithGoogle}>
+        Sign in with Google
+      </Button>
+    </div>
+  );
+};
+
+const SignOut = () => {
+  return (
+    auth.currentUser && (
+      <Button variant="outlined" onClick={() => auth.signOut()}>
+        Sign Out
+      </Button>
+    )
+  );
+};
+
+const UserAvatar = styled(Avatar)``;
+
+const Container = styled.div`
+  background-color: white;
+`;
